@@ -41,7 +41,13 @@ PLATFORMS: list[Platform] = [
     Platform.IMAGE,
     Platform.EVENT,
     Platform.LIGHT,
+    Platform.ALARM_CONTROL_PANEL,
 ]
+
+# Bridge events that should refresh the coordinator immediately rather than waiting for
+# the next scheduled poll (up to `poll_min` minutes away) — a guard-mode change made
+# outside HA (the Eufy app, a keypad, a schedule) should reach the alarm panel promptly.
+_IMMEDIATE_REFRESH_EVENTS = frozenset({"ready", "armingModeChanged"})
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: EufySdkConfigEntry) -> bool:
@@ -67,7 +73,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: EufySdkConfigEntry) -> b
 
     def _on_event(evt: dict) -> None:
         hass.bus.async_fire(f"{DOMAIN}_event", evt)
-        if evt.get("event") == "ready":
+        if evt.get("event") in _IMMEDIATE_REFRESH_EVENTS:
             _refresh_now()
 
     client = EufySdkApiClient(

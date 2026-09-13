@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components.select import SelectEntity
 from homeassistant.const import EntityCategory
 
+from .alarm_control_panel import ARMING_OWNED_PROPS
 from .entity import EufySdkPropertyEntity, classify
 
 if TYPE_CHECKING:
@@ -28,7 +29,10 @@ async def async_setup_entry(
         EufySdkSelect(coordinator, sn, spec)
         for sn in coordinator.data
         for spec in entry.runtime_data.properties.get(sn, [])
-        if classify(spec) == "select"
+        # The alarm_control_panel platform owns armingMode — don't also surface it as
+        # a raw select (would double the control, and let you "select" an unsettable
+        # mode like schedule/off/geo that silently no-ops on write).
+        if spec["name"] not in ARMING_OWNED_PROPS and classify(spec) == "select"
     )
 
 
