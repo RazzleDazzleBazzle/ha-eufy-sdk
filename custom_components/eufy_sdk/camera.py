@@ -57,6 +57,13 @@ class EufySdkCamera(CoordinatorEntity["EufySdkDataUpdateCoordinator"], Camera):
         """Bind to a device serial + the bridge address."""
         CoordinatorEntity.__init__(self, coordinator)
         Camera.__init__(self)
+        # Confirmed live that go2rtc's RTSP server rejects a UDP SETUP outright (461
+        # Unsupported transport). A plain ffmpeg CLI pull retries over TCP automatically
+        # and never shows this; HA's own stream client doesn't, so live view silently
+        # never starts without forcing the transport here. A plain instance attribute,
+        # not a property — Camera.__init__ above sets `self.stream_options = {}` itself,
+        # which a read-only property override would reject outright (AttributeError).
+        self.stream_options = {"rtsp_transport": "tcp"}
         self._sn = sn
         self._host = host
         self._port = port
@@ -78,18 +85,6 @@ class EufySdkCamera(CoordinatorEntity["EufySdkDataUpdateCoordinator"], Camera):
     async def stream_source(self) -> str:
         """Return the go2rtc RTSP URL — HA's stream component + go2rtc do the work."""
         return f"rtsp://{self._host}:{GO2RTC_RTSP_PORT}/{self._sn}"
-
-    @property
-    def stream_options(self) -> dict[str, str]:
-        """
-        Force TCP.
-
-        Confirmed live that go2rtc's RTSP server rejects a UDP SETUP outright (461
-        Unsupported transport). A plain ffmpeg CLI pull retries over TCP automatically
-        and never shows this; HA's own stream client doesn't, so live view silently
-        never starts without forcing the transport here.
-        """
-        return {"rtsp_transport": "tcp"}
 
     async def async_camera_image(
         self,
