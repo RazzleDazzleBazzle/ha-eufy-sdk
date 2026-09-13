@@ -64,14 +64,16 @@ class EufySdkCamera(CoordinatorEntity["EufySdkDataUpdateCoordinator"], Camera):
         # not a property — Camera.__init__ above sets `self.stream_options = {}` itself,
         # which a read-only property override would reject outright (AttributeError).
         #
-        # `stimeout` (microseconds): confirmed live this camera's P2P handshake takes
-        # ~10s before real video data starts flowing (measured via a direct curl pull
-        # against the bridge). HA's own RTSP client's default read timeout is shorter
-        # than that — it connects fine, then gives up ~5s in with "Operation timed out"
-        # / "Invalid data found", right before real data would have arrived. A plain
-        # ffmpeg CLI pull never hits this because its own default timeout is far more
-        # generous. 20s gives comfortable headroom above the measured ~10s.
-        self.stream_options = {"rtsp_transport": "tcp", "stimeout": "20000000"}
+        # NOT a place to add a longer read timeout: confirmed against HA core's own
+        # STREAM_OPTIONS_SCHEMA (homeassistant/components/stream/__init__.py) that only
+        # rtsp_transport / use_wallclock_as_timestamps / extra_part_wait_time are
+        # accepted — anything else (e.g. stimeout) is rejected outright ("extra keys
+        # not allowed"), and HA hard-codes its own 5s RTSP read timeout with no override
+        # hook at all. A camera whose P2P handshake is slower than that needs the bridge
+        # itself to keep the session warm across a quick reconnect instead (see
+        # ha-eufy-sdk-bridge's stream reconnect grace period) — nothing on this side can
+        # make HA wait longer.
+        self.stream_options = {"rtsp_transport": "tcp"}
         self._sn = sn
         self._host = host
         self._port = port
