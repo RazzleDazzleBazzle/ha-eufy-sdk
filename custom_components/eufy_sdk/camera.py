@@ -79,6 +79,18 @@ class EufySdkCamera(CoordinatorEntity["EufySdkDataUpdateCoordinator"], Camera):
         """Return the go2rtc RTSP URL — HA's stream component + go2rtc do the work."""
         return f"rtsp://{self._host}:{GO2RTC_RTSP_PORT}/{self._sn}"
 
+    @property
+    def stream_options(self) -> dict[str, str]:
+        """
+        Force TCP.
+
+        Confirmed live that go2rtc's RTSP server rejects a UDP SETUP outright (461
+        Unsupported transport). A plain ffmpeg CLI pull retries over TCP automatically
+        and never shows this; HA's own stream client doesn't, so live view silently
+        never starts without forcing the transport here.
+        """
+        return {"rtsp_transport": "tcp"}
+
     async def async_camera_image(
         self,
         width: int | None = None,  # noqa: ARG002
