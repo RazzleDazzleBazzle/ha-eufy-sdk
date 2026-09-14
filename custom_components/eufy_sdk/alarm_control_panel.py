@@ -8,13 +8,18 @@ gives it the native `alarm_control_panel` domain instead, so it gets HA's own
 Lovelace panel card, voice-assistant "arm/disarm" phrasing, and (via HA's own HomeKit
 bridge) a proper HomeKit Security System accessory — none of which target a `select`.
 
-Only away/home/disarmed are wire-confirmed as SETTABLE (see the SDK's arming
-capability) even though the station can REPORT six more (schedule/custom1-3/off/geo) —
-e.g. a schedule-resolved period. Those extra read states have no fixed mapping to a
+away/home/custom1/disarmed are wire-confirmed as SETTABLE (see the SDK's arming
+capability) even though the station can REPORT five more (schedule/custom2-3/off/geo)
+— e.g. a schedule-resolved period. Those extra read states have no fixed mapping to a
 HA alarm state (which one is "night" depends on how a given account's schedule is
 configured in the Eufy app, not on anything the wire reports), so they show as
-STATE_UNKNOWN here rather than guessing. Arm Night isn't offered for the same reason:
-there's no wire-confirmed write for it.
+STATE_UNKNOWN here rather than guessing.
+
+`custom1` -> Arm Night specifically is an ACCOUNT-SPECIFIC choice, not a general one:
+it matches this account's own Eufy app schedule, which has custom1 configured as its
+Night period (confirmed against the actual schedule, mirroring the prior integration's
+own documented reasoning for the same mapping) — not something the wire reports or the
+SDK asserts. Update `_ARM_NIGHT_MODE` below if that schedule slot is ever reconfigured.
 """
 
 from __future__ import annotations
@@ -42,12 +47,17 @@ if TYPE_CHECKING:
 ARMING_PROP = "armingMode"
 ARMING_OWNED_PROPS = frozenset({ARMING_PROP})
 
+# Eufy guard-mode label for Arm Night — see module docstring: account-specific, not a
+# general "custom1 means night" assumption.
+_ARM_NIGHT_MODE = "custom1"
+
 # Wire-confirmed settable modes only (the labels `armingMode`'s enumValues use for
 # their own keys are the same strings `device.set` accepts back).
 _STATE_BY_LABEL: dict[str, AlarmControlPanelState] = {
     "away": AlarmControlPanelState.ARMED_AWAY,
     "home": AlarmControlPanelState.ARMED_HOME,
     "disarmed": AlarmControlPanelState.DISARMED,
+    _ARM_NIGHT_MODE: AlarmControlPanelState.ARMED_NIGHT,
 }
 
 
@@ -82,6 +92,7 @@ class EufySdkAlarmControlPanel(EufySdkPropertyEntity, AlarmControlPanelEntity):
     _attr_supported_features = (
         AlarmControlPanelEntityFeature.ARM_HOME
         | AlarmControlPanelEntityFeature.ARM_AWAY
+        | AlarmControlPanelEntityFeature.ARM_NIGHT
     )
     # The bridge sits behind your own network/HA auth already; a second PIN here would
     # just be friction. Revisit if this ever needs to satisfy Alexa/Google Guard Mode's
@@ -101,7 +112,7 @@ class EufySdkAlarmControlPanel(EufySdkPropertyEntity, AlarmControlPanelEntity):
 
     @property
     def alarm_state(self) -> AlarmControlPanelState | None:
-        """Away/Home/Disarmed map to a HA state; any other reported mode is unknown."""
+        """Away/Home/Night/Disarmed map to a HA state; other modes are unknown."""
         v = self.prop_value
         if v is None:
             return None
@@ -118,3 +129,7 @@ class EufySdkAlarmControlPanel(EufySdkPropertyEntity, AlarmControlPanelEntity):
     async def async_alarm_arm_away(self, code: str | None = None) -> None:  # noqa: ARG002
         """Arm Away."""
         await self.write("away")
+
+    async def async_alarm_arm_night(self, code: str | None = None) -> None:  # noqa: ARG002
+        """Arm Night — see the module docstring for why this targets custom1."""
+        await self.write(_ARM_NIGHT_MODE)
