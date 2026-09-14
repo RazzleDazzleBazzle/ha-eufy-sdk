@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -24,6 +24,17 @@ class EufySdkDataUpdateCoordinator(DataUpdateCoordinator[dict[str, dict]]):
     # reassigned per-update, so the class-level {} is only an initial fallback. Live
     # values arrive via `solixReading` events.
     solix_devices: ClassVar[dict[str, dict]] = {}
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Init the coordinator, plus the event-only state a poll never carries."""
+        super().__init__(*args, **kwargs)
+        # station sn -> the last armingModeChanged push's own resolved `currentMode`
+        # label. NOT part of the polled device list (armingMode reads back the
+        # POLICY, e.g. literally "schedule" forever) — this is the schedule/geo
+        # resolution that only ever arrives on this one event, so it has to be
+        # cached here rather than re-derived from a fresh read. See
+        # alarm_control_panel.py.
+        self.current_arming_modes: dict[str, str] = {}
 
     async def _async_update_data(self) -> dict[str, dict]:
         """Ensure the connection is up, confirm we're authed, and return the devices."""

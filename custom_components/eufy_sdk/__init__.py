@@ -73,6 +73,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: EufySdkConfigEntry) -> b
 
     def _on_event(evt: dict) -> None:
         hass.bus.async_fire(f"{DOMAIN}_event", evt)
+        if evt.get("event") == "armingModeChanged":
+            # currentMode is the push's own resolved live mode — the schedule/geo
+            # resolution armingMode itself never carries (it reads back the POLICY,
+            # literally "schedule" forever). It arrives ONLY on this event, never on
+            # a poll, so it has to be cached here rather than re-read after the
+            # refresh below. See coordinator.py + alarm_control_panel.py.
+            sn = evt.get("stationSn") or evt.get("deviceSn")
+            current_mode = evt.get("currentMode")
+            if sn and current_mode:
+                coordinator.current_arming_modes[sn] = current_mode
         if evt.get("event") in _IMMEDIATE_REFRESH_EVENTS:
             _refresh_now()
 
