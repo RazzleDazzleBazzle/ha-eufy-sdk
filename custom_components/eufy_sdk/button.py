@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
 from homeassistant.const import EntityCategory
 
-from .entity import EufySdkDeviceEntity
+from .entity import EufySdkDeviceEntity, has_capability
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -22,7 +22,7 @@ async def async_setup_entry(
     entry: EufySdkConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Create a Reboot button (HomeBases) and a Refresh-Last-Event button (cameras)."""
+    """Create Reboot / Refresh-Last-Event / Resume-Schedule buttons."""
     coordinator = entry.runtime_data.coordinator
     entities: list[ButtonEntity] = [
         EufySdkRebootButton(coordinator, sn)
@@ -36,6 +36,14 @@ async def async_setup_entry(
         EufyRefreshEventButton(coordinator, sn)
         for sn, dev in coordinator.data.items()
         if dev.get("stream")
+    )
+    # One "Resume Schedule" button per station with a guard mode — the counterpart to
+    # the alarm panel's Away/Home/Night/Disarm buttons for the one settable mode HA's
+    # alarm_control_panel domain has no button for at all. See EufyResumeScheduleButton.
+    entities.extend(
+        EufyResumeScheduleButton(coordinator, sn)
+        for sn, dev in coordinator.data.items()
+        if has_capability(dev, "arming")
     )
     async_add_entities(entities)
 
@@ -74,3 +82,31 @@ class EufyRefreshEventButton(EufySdkDeviceEntity, ButtonEntity):
         """Ask the bridge to re-pull the newest event cover (nudges the Image)."""
         client = self.coordinator.config_entry.runtime_data.client
         await client.refresh_event_image(self._sn)
+
+
+class EufyResumeScheduleButton(EufySdkDeviceEntity, ButtonEntity):
+    """
+    Resume the Eufy app's own time-based guard-mode schedule.
+
+    HA's `alarm_control_panel` domain has no "schedule" state or action at all — only
+    Away/Home/Night/Disarm — so this is a plain button rather than something the panel
+    itself could expose. It exists specifically to rebuild a "resume the schedule after
+    a manual override" automation (e.g. "if armed Home via the Home app, resume
+    schedule shortly after" — a real workflow confirmed working against this account on
+    a prior integration): a trigger on the alarm panel's `armed_home` state, calling
+    this button's `press` as the action.
+    """
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = "mdi:calendar-clock"
+    _attr_name = "Resume Schedule"
+
+    def __init__(self, coordinator: EufySdkDataUpdateCoordinator, sn: str) -> None:
+        """Bind to a station serial."""
+        super().__init__(coordinator, sn)
+        self._attr_unique_id = f"{sn}_resume_schedule"
+
+    async def async_press(self) -> None:
+        """Set the station's guard mode back to `schedule`."""
+        client = self.coordinator.config_entry.runtime_data.client
+        await client.set_property(self._sn, "armingMode", "schedule")
