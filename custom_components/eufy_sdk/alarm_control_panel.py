@@ -9,11 +9,16 @@ Lovelace panel card, voice-assistant "arm/disarm" phrasing, and (via HA's own Ho
 bridge) a proper HomeKit Security System accessory — none of which target a `select`.
 
 away/home/custom1/disarmed are wire-confirmed as SETTABLE (see the SDK's arming
-capability) even though the station can REPORT five more (schedule/custom2-3/off/geo)
-— e.g. a schedule-resolved period. Those extra read states have no fixed mapping to a
-HA alarm state (which one is "night" depends on how a given account's schedule is
-configured in the Eufy app, not on anything the wire reports), so they show as
-STATE_UNKNOWN here rather than guessing.
+capability) even though the station can REPORT five more (schedule/custom2-3/off/geo).
+Reading `armingMode` while the policy is schedule/geo answers that literal policy name
+forever, not what the schedule has actually resolved to right now — a station cycling
+Home/Night on a schedule would otherwise report nothing but "schedule" indefinitely.
+For those two specifically, `alarm_state` falls back to the coordinator's
+`current_arming_modes` cache, populated from the armingModeChanged push's own resolved
+`currentMode` field (see `__init__.py`'s `_on_event` + coordinator.py) — best-effort,
+since it only has a value once at least one such push has arrived. custom2/custom3/off
+have no fallback at all (no observed real-world meaning to fall back to) and stay
+STATE_UNKNOWN.
 
 `custom1` -> Arm Night specifically is an ACCOUNT-SPECIFIC choice, not a general one:
 it matches this account's own Eufy app schedule, which has custom1 configured as its
@@ -112,11 +117,21 @@ class EufySdkAlarmControlPanel(EufySdkPropertyEntity, AlarmControlPanelEntity):
 
     @property
     def alarm_state(self) -> AlarmControlPanelState | None:
-        """Away/Home/Night/Disarmed map to a HA state; other modes are unknown."""
+        """Direct states map as-is; schedule/geo fall back to currentMode."""
         v = self.prop_value
         if v is None:
             return None
-        return _STATE_BY_LABEL.get(self._label_by_raw.get(str(v)))
+        label = self._label_by_raw.get(str(v))
+        state = _STATE_BY_LABEL.get(label)
+        if state is not None:
+            return state
+        # armingMode read back the POLICY (schedule/geo/off/custom2/custom3), not a
+        # directly mappable state — fall back to the last armingModeChanged push's
+        # own resolved value, if one has arrived yet. See coordinator.py's
+        # current_arming_modes: this can't just be a fresh read, since the
+        # resolution only ever arrives on that event, never on a poll.
+        resolved = self.coordinator.current_arming_modes.get(self._sn)
+        return _STATE_BY_LABEL.get(resolved)
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:  # noqa: ARG002
         """Disarm."""
