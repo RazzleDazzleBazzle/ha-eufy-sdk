@@ -195,8 +195,17 @@ class EufySdkApiClient:
 
     # ── devices ──
     async def list_devices(self) -> list[dict[str, Any]]:
-        """Every device the bridge exposes (sn/name/model/codec/capabilities/state)."""
-        return (await self.rpc("devices.list"))["devices"]
+        """
+        Every device the bridge exposes (sn/name/model/codec/capabilities/state).
+
+        Fans out to one Eufy-cloud HTTP call per device on the bridge side, so its
+        latency scales with fleet size and whatever the cloud is doing right now —
+        the same reason `light.effects` gets a longer-than-default timeout below.
+        Past the default 15s this used to mark every entity `unavailable` until the
+        NEXT scheduled poll (`poll_interval_minutes` away) purely because one cloud
+        round-trip was briefly slow, not because anything was actually down.
+        """
+        return (await self.rpc("devices.list", timeout=60))["devices"]
 
     async def refresh_event_image(self, sn: str) -> bool:
         """Force a 'Last event' image refresh; returns True if a newer image landed."""
