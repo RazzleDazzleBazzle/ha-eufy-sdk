@@ -51,7 +51,7 @@ Two workflows gate every PR into `main`/`dev` and must pass:
 
 ## Testing your change in Home Assistant
 
-This integration is a **client of the [bridge](https://github.com/mega-yfue/ha-eufy-sdk-bridge)** — it
+This integration is a **client of the [bridge](https://github.com/RazzleDazzleBazzle/ha-eufy-sdk-bridge)** — it
 needs a running bridge to do anything. Run one (Docker/add-on), install this integration into a test
 HA instance via HACS **Custom repositories**, and point the config flow at your bridge.
 

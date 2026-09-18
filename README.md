@@ -1,13 +1,13 @@
 # ha-eufy-sdk
 
 [![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5?logo=home-assistant&logoColor=white)](https://hacs.xyz)
-[![Validate](https://github.com/mega-yfue/ha-eufy-sdk/actions/workflows/validate.yml/badge.svg)](https://github.com/mega-yfue/ha-eufy-sdk/actions/workflows/validate.yml)
-[![Lint](https://github.com/mega-yfue/ha-eufy-sdk/actions/workflows/lint.yml/badge.svg)](https://github.com/mega-yfue/ha-eufy-sdk/actions/workflows/lint.yml)
-[![release](https://img.shields.io/github/v/release/mega-yfue/ha-eufy-sdk?sort=semver)](https://github.com/mega-yfue/ha-eufy-sdk/releases)
-[![license](https://img.shields.io/github/license/mega-yfue/ha-eufy-sdk)](./LICENSE)
+[![Validate](https://github.com/RazzleDazzleBazzle/ha-eufy-sdk/actions/workflows/validate.yml/badge.svg)](https://github.com/RazzleDazzleBazzle/ha-eufy-sdk/actions/workflows/validate.yml)
+[![Lint](https://github.com/RazzleDazzleBazzle/ha-eufy-sdk/actions/workflows/lint.yml/badge.svg)](https://github.com/RazzleDazzleBazzle/ha-eufy-sdk/actions/workflows/lint.yml)
+[![release](https://img.shields.io/github/v/release/RazzleDazzleBazzle/ha-eufy-sdk?sort=semver)](https://github.com/RazzleDazzleBazzle/ha-eufy-sdk/releases)
+[![license](https://img.shields.io/github/license/RazzleDazzleBazzle/ha-eufy-sdk)](./LICENSE)
 
 The Home Assistant integration for eufy — installed via **HACS**. This is the front door: it talks to
-the [`ha-eufy-sdk-bridge`](https://github.com/mega-yfue/ha-eufy-sdk-bridge) over WebSocket and turns
+the [`ha-eufy-sdk-bridge`](https://github.com/RazzleDazzleBazzle/ha-eufy-sdk-bridge) over WebSocket and turns
 every device the bridge reports into HA entities, with live video via the bridge's bundled go2rtc.
 
 - **Config flow**: point it at a bridge URL, or let it auto-discover the add-on via the Supervisor.
@@ -17,7 +17,7 @@ every device the bridge reports into HA entities, with live video via the bridge
 ## Requirements
 
 This integration is a **client**. It does nothing on its own — it needs the
-[`ha-eufy-sdk-bridge`](https://github.com/mega-yfue/ha-eufy-sdk-bridge) running and logged into your
+[`ha-eufy-sdk-bridge`](https://github.com/RazzleDazzleBazzle/ha-eufy-sdk-bridge) running and logged into your
 eufy account (the bridge is where the eufy login, device list, and video actually live). Set that up
 **first**: run it as a Docker container next to Home Assistant, or install the
 [add-on](https://github.com/mega-yfue/ha-eufy-sdk-addon). Home Assistant **2026.6.4+**.
@@ -26,7 +26,7 @@ eufy account (the bridge is where the eufy login, device list, and video actuall
 
 **1. Add the repository to HACS** — one click:
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=mega-yfue&repository=ha-eufy-sdk&category=integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=RazzleDazzleBazzle&repository=ha-eufy-sdk&category=integration)
 
 Or manually: HACS → **Custom repositories** → add this repo as an *Integration* → **Install**.
 Restart Home Assistant when HACS asks.
@@ -57,8 +57,8 @@ sensors. The eufyMake 3D printer isn't supported yet.
 
 | Repo | Role |
 | --- | --- |
-| [`eufy-sdk`](https://github.com/mega-yfue/eufy-sdk) | the HA-agnostic library |
-| [`ha-eufy-sdk-bridge`](https://github.com/mega-yfue/ha-eufy-sdk-bridge) | WS + HTTP + go2rtc daemon (Docker) |
+| [`eufy-sdk`](https://github.com/RazzleDazzleBazzle/eufy-sdk) | the HA-agnostic library |
+| [`ha-eufy-sdk-bridge`](https://github.com/RazzleDazzleBazzle/ha-eufy-sdk-bridge) | WS + HTTP + go2rtc daemon (Docker) |
 | [`ha-eufy-sdk-addon`](https://github.com/mega-yfue/ha-eufy-sdk-addon) | Home Assistant add-on wrapper |
 | **`ha-eufy-sdk`** | **this** — the HACS integration (front door) |
 

@@ -1,5 +1,5 @@
 {
-    "name": "mega-yfue/ha-eufy-sdk",
+    "name": "RazzleDazzleBazzle/ha-eufy-sdk",
     "image": "mcr.microsoft.com/devcontainers/base:debian",
     "postCreateCommand": "scripts/setup",
     "forwardPorts": [
