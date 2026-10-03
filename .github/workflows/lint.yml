@@ -43,3 +43,30 @@ jobs:
 
       - name: Format
         run: python3 -m ruff format . --check
+
+  pytest:
+    name: "pytest"
+    runs-on: "ubuntu-latest"
+    permissions:
+      contents: read # private repo: checkout needs read, stripped by top-level permissions: {}
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.14"
+          cache: "pip"
+
+      # Deliberately just pytest, not the full requirements_dev.txt — today's tests
+      # (schedule.py's resolve_current_mode) are plain Python with no Home Assistant
+      # import at all, so pulling in the full `homeassistant` package here would only
+      # slow this job down for no coverage gained. Revisit if a future test needs it.
+      - name: Install pytest
+        run: python3 -m pip install pytest==8.4.2
+
+      - name: Test
+        run: python3 -m pytest tests

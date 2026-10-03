@@ -21,6 +21,11 @@ ignore = [
 [lint.flake8-pytest-style]
 fixture-parentheses = false
 
+[lint.per-file-ignores]
+# S101 (assert) is pytest's own idiom, not a production security concern — same exemption
+# HA core's own pyproject.toml this file is based on carries for its tests directory.
+"tests/*" = ["S101"]
+
 [lint.pyupgrade]
 keep-runtime-typing = true
 

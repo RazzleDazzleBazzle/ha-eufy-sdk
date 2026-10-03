@@ -13,12 +13,20 @@ capability) even though the station can REPORT five more (schedule/custom2-3/off
 Reading `armingMode` while the policy is schedule/geo answers that literal policy name
 forever, not what the schedule has actually resolved to right now — a station cycling
 Home/Night on a schedule would otherwise report nothing but "schedule" indefinitely.
-For those two specifically, `alarm_state` falls back to the coordinator's
-`current_arming_modes` cache, populated from the armingModeChanged push's own resolved
-`currentMode` field (see `__init__.py`'s `_on_event` + coordinator.py) — best-effort,
-since it only has a value once at least one such push has arrived. custom2/custom3/off
-have no fallback at all (no observed real-world meaning to fall back to) and stay
-STATE_UNKNOWN.
+For those two specifically, `alarm_state` falls back, in order:
+
+1. The coordinator's `current_arming_modes` cache, populated from the armingModeChanged
+   push's own resolved `currentMode` field (see `__init__.py`'s `_on_event` +
+   coordinator.py) — freshest when one has arrived, but only ever updates on that one
+   event, never a poll. A push missed entirely (e.g. a reconnect landing mid-transition)
+   leaves this showing whatever the PREVIOUS transition set, indefinitely.
+2. The station's own `schedule` property (eufy-sdk's `arming.schedule`, see
+   schedule.py's `resolve_current_mode`) — the day/time timetable the station itself
+   consults, reported on every regular poll rather than only a push, so it fills
+   exactly the gap (1) leaves whenever the exact transition push was missed.
+
+custom2/custom3/off have no fallback at all (no observed real-world meaning to fall back
+to, and no schedule slot ever reports those ids) and stay STATE_UNKNOWN.
 
 `custom1` -> Arm Night specifically is an ACCOUNT-SPECIFIC choice, not a general one:
 it matches this account's own Eufy app schedule, which has custom1 configured as its
@@ -36,8 +44,10 @@ from homeassistant.components.alarm_control_panel import (
     AlarmControlPanelEntityFeature,
     AlarmControlPanelState,
 )
+from homeassistant.util import dt as dt_util
 
 from .entity import EufySdkPropertyEntity, has_capability
+from .schedule import resolve_current_mode
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -117,7 +127,7 @@ class EufySdkAlarmControlPanel(EufySdkPropertyEntity, AlarmControlPanelEntity):
 
     @property
     def alarm_state(self) -> AlarmControlPanelState | None:
-        """Direct states map as-is; schedule/geo fall back to currentMode."""
+        """Fallback order: direct map, then currentMode, then the schedule."""
         v = self.prop_value
         if v is None:
             return None
@@ -126,11 +136,19 @@ class EufySdkAlarmControlPanel(EufySdkPropertyEntity, AlarmControlPanelEntity):
         if state is not None:
             return state
         # armingMode read back the POLICY (schedule/geo/off/custom2/custom3), not a
-        # directly mappable state — fall back to the last armingModeChanged push's
-        # own resolved value, if one has arrived yet. See coordinator.py's
-        # current_arming_modes: this can't just be a fresh read, since the
-        # resolution only ever arrives on that event, never on a poll.
+        # directly mappable state. Prefer the last armingModeChanged push's own resolved
+        # value — freshest when one has arrived — but that only ever updates on that one
+        # event, never a poll (see coordinator.py's current_arming_modes), so a push
+        # missed entirely (e.g. a reconnect landing mid-transition) leaves it stuck on
+        # whatever the PREVIOUS transition set. The station's own schedule timetable
+        # (reported on every regular poll) fills exactly that gap — see schedule.py.
         resolved = self.coordinator.current_arming_modes.get(self._sn)
+        if resolved is None:
+            resolved = resolve_current_mode(
+                self.device.get("state", {}).get("schedule"),
+                dt_util.now(),
+                self._label_by_raw,
+            )
         return _STATE_BY_LABEL.get(resolved)
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:  # noqa: ARG002
