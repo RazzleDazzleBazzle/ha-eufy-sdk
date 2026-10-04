@@ -15,15 +15,19 @@ forever, not what the schedule has actually resolved to right now — a station 
 Home/Night on a schedule would otherwise report nothing but "schedule" indefinitely.
 For those two specifically, `alarm_state` falls back, in order:
 
-1. The coordinator's `current_arming_modes` cache, populated from the armingModeChanged
-   push's own resolved `currentMode` field (see `__init__.py`'s `_on_event` +
-   coordinator.py) — freshest when one has arrived, but only ever updates on that one
-   event, never a poll. A push missed entirely (e.g. a reconnect landing mid-transition)
-   leaves this showing whatever the PREVIOUS transition set, indefinitely.
-2. The station's own `schedule` property (eufy-sdk's `arming.schedule`, see
+1. The station's own `schedule` property (eufy-sdk's `arming.schedule`, see
    schedule.py's `resolve_current_mode`) — the day/time timetable the station itself
-   consults, reported on every regular poll rather than only a push, so it fills
-   exactly the gap (1) leaves whenever the exact transition push was missed.
+   consults, reported on every regular poll, so it's always computed fresh against
+   the current time rather than depending on catching a specific event.
+2. The coordinator's `current_arming_modes` cache, populated from the armingModeChanged
+   push's own resolved `currentMode` field (see `__init__.py`'s `_on_event` +
+   coordinator.py) — only used when (1) has nothing to compute from at all (the "geo"
+   policy, which has no timetable), since this cache has no freshness check of its own:
+   it updates ONLY on an actual transition event, so writing the policy to "schedule"
+   mid-slot produces no new push and this would otherwise read back whatever mode was
+   active BEFORE the write. Confirmed live (2026-10-04): preferring this over (1) made
+   a Home->Schedule switch flip straight back to the PRIOR Away state within seconds,
+   three separate times in one day — see `alarm_state`'s own comment for the full story.
 
 custom2/custom3/off have no fallback at all (no observed real-world meaning to fall back
 to, and no schedule slot ever reports those ids) and stay STATE_UNKNOWN.
@@ -127,7 +131,7 @@ class EufySdkAlarmControlPanel(EufySdkPropertyEntity, AlarmControlPanelEntity):
 
     @property
     def alarm_state(self) -> AlarmControlPanelState | None:
-        """Fallback order: direct map, then currentMode, then the schedule."""
+        """Fallback order: direct map, then the schedule, then currentMode."""
         v = self.prop_value
         if v is None:
             return None
@@ -136,19 +140,27 @@ class EufySdkAlarmControlPanel(EufySdkPropertyEntity, AlarmControlPanelEntity):
         if state is not None:
             return state
         # armingMode read back the POLICY (schedule/geo/off/custom2/custom3), not a
-        # directly mappable state. Prefer the last armingModeChanged push's own resolved
-        # value — freshest when one has arrived — but that only ever updates on that one
-        # event, never a poll (see coordinator.py's current_arming_modes), so a push
-        # missed entirely (e.g. a reconnect landing mid-transition) leaves it stuck on
-        # whatever the PREVIOUS transition set. The station's own schedule timetable
-        # (reported on every regular poll) fills exactly that gap — see schedule.py.
-        resolved = self.coordinator.current_arming_modes.get(self._sn)
+        # directly mappable state. Prefer the station's own schedule timetable
+        # (reported on every regular poll — see schedule.py) over the last
+        # armingModeChanged push's resolved value, because the push is a one-shot
+        # marker with no freshness check of its own: it only ever updates on an actual
+        # transition event, so writing the policy to "schedule" mid-slot (not at a
+        # scheduled boundary) produces no new push at all, and this would otherwise
+        # read back whatever mode was active BEFORE the write — confirmed live
+        # (2026-10-04): switching Away -> Home re-armed the policy to
+        # schedule, which this station's own timetable correctly says is "home" right
+        # now, but current_arming_modes was still holding "away" from before the switch
+        # (no push had fired to update it), so preferring it here made the panel/HomeKit
+        # flip straight back to Away seconds after showing Home — three times that day.
+        # current_arming_modes stays as the fallback for "geo" policy, which has no
+        # timetable to compute from at all, so the schedule here is always None for it.
+        resolved = resolve_current_mode(
+            self.device.get("state", {}).get("schedule"),
+            dt_util.now(),
+            self._label_by_raw,
+        )
         if resolved is None:
-            resolved = resolve_current_mode(
-                self.device.get("state", {}).get("schedule"),
-                dt_util.now(),
-                self._label_by_raw,
-            )
+            resolved = self.coordinator.current_arming_modes.get(self._sn)
         return _STATE_BY_LABEL.get(resolved)
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:  # noqa: ARG002
