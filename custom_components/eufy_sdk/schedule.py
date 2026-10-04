@@ -38,22 +38,32 @@ def resolve_current_mode(
     """
     Which mode's slot in `schedule` covers `now`, or None if nothing usable matched.
 
-    `schedule` is `arming.schedule`'s raw value: expected to be a list of
-    `{week, start_h, start_m, end_h, end_m, mode_id}` dicts, `week` 0 = Sunday (NOT
+    `schedule` is `arming.schedule`'s raw value. CONFIRMED LIVE (2026-10-04) this is an
+    OBJECT, not a bare array: `{account_id, schedules: [...]}`, the slot array one key
+    deep — this function accepts that shape (unwrapping `schedules`) and, defensively, a
+    bare list too, in case a different account/firmware ever reports one directly. Each
+    slot is `{week, start_h, start_m, end_h, end_m, mode_id}`, `week` 0 = Sunday (NOT
     Python's own `datetime.weekday()` convention, which is Monday = 0 — converted
     internally). A slot's end boundary is EXCLUSIVE, except a slot written to end
     exactly 23:59, which runs to midnight (see `_END_OF_DAY`).
+
+    Getting the wrapper shape wrong is exactly how this went unnoticed before: a caller
+    built against a bare-array assumption gets nothing usable back, silently, from every
+    single call — which is precisely what happened here from the day this shipped until
+    a live "mode shows Off instead of Home" report traced it back to this property.
 
     `label_by_raw` is the same `{raw_wire_value_as_string: label}` map an armingMode
     PropertySpec's own `enumValues` already provides (see `alarm_control_panel.py`'s
     `_label_by_raw`) — `mode_id` is documented as the identical wire integer, so no
     separate mapping is needed.
 
-    Malformed input (not a list, a non-dict entry, a missing/non-numeric field, an
+    Malformed input (not a list/dict, a non-dict entry, a missing/non-numeric field, an
     unmapped `mode_id`) is skipped rather than raising: a caller showing "unknown" for
     one bad slot is far better than a crashed coordinator update over a property this
     SDK doesn't independently wire-confirm.
     """
+    if isinstance(schedule, dict):
+        schedule = schedule.get("schedules")
     if not isinstance(schedule, list):
         return None
     eufy_week = (now.weekday() + 1) % 7

@@ -124,6 +124,28 @@ def test_non_list_schedule_resolves_to_none() -> None:
     assert resolve_current_mode("schedule", _dt(2026, 10, 1, 12, 0), LABELS) is None
 
 
+def test_unwraps_the_real_account_id_schedules_wrapper() -> None:
+    """The real wire shape is {account_id, schedules: [...]}, not a bare array."""
+    wrapped = {"account_id": "abc123", "schedules": THURSDAY_SCHEDULE}
+    assert resolve_current_mode(wrapped, _dt(2026, 10, 1, 12, 0), LABELS) == "home"
+
+
+def test_a_dict_with_no_usable_schedules_key_resolves_to_none() -> None:
+    """A dict missing/malforming `schedules` degrades to None rather than raising."""
+    assert (
+        resolve_current_mode({"account_id": "abc123"}, _dt(2026, 10, 1, 12, 0), LABELS)
+        is None
+    )
+    assert (
+        resolve_current_mode(
+            {"account_id": "abc123", "schedules": "not-a-list"},
+            _dt(2026, 10, 1, 12, 0),
+            LABELS,
+        )
+        is None
+    )
+
+
 def test_malformed_slots_are_skipped_not_raised() -> None:
     """One bad slot must not stop a later good slot from matching."""
     schedule = [
